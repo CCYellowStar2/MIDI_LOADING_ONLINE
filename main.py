@@ -6,6 +6,7 @@ import psutil
 from processor import MidiProcessor
 from bridge import KeyboardBridge
 from logger import AppLogger
+from MidiListener import MidiListener
 
 class AIPianoApp:
     def __init__(self, root):
@@ -27,7 +28,8 @@ class AIPianoApp:
         self.transpose = tk.IntVar(value=0)
         self.visual_on = tk.BooleanVar(value=True)
         self.countdown_text = tk.StringVar(value="")
-        
+        self.midi_listener = MidiListener(self.bridge, self)
+
         self.setup_ui()
         self.update_cpu_monitor()
 
@@ -69,9 +71,22 @@ class AIPianoApp:
         self.tp_spin.grid(row=0, column=4)
         
         ttk.Checkbutton(set_frame, text="開啟視覺化", variable=self.visual_on).grid(row=0, column=5, padx=10)
-
+        # 獲取設備列表
+        ports = self.midi_listener.get_available_ports()
+        self.port_var = tk.StringVar()
+        self.port_combo = ttk.Combobox(ctrl_frame, textvariable=self.port_var, values=ports)
+        self.port_combo.pack(side="left", padx=5)
+        # 添加一個連接按鈕
+        ttk.Button(ctrl_frame, text="連接 MIDI 鍵盤", command=self.connect_midi).pack(side="left")
+        
         # 4. 88鍵畫布
         self.setup_visual_canvas()
+
+    def connect_midi(self):
+        port_name = self.port_var.get()
+        if port_name:
+            self.midi_listener.start_listening(port_name)
+            self.info_lbl.config(text=f"[實時模式] 已連接: {port_name}")
 
     def setup_visual_canvas(self):
         v_frame = ttk.LabelFrame(self.root, text="視覺化鋼琴 (88鍵)")
@@ -108,8 +123,8 @@ class AIPianoApp:
     def update_info_display(self, elapsed=0):
         if not self.current_song: return
         s_factor = self.speed.get()
-        # 考慮到速度，計算剩餘/總長度
-        real_duration = (self.current_song['duration'] * (60 / self.current_song['bpm'])) / s_factor
+        # 直接除以倍速即可
+        real_duration = self.current_song['duration'] / s_factor
         
         m, s = divmod(int(elapsed), 60)
         tm, ts = divmod(int(real_duration), 60)
@@ -152,6 +167,14 @@ class AIPianoApp:
             self.is_playing = True
             threading.Thread(target=self.play_engine, daemon=True).start()
 
+    def adjust_pitch(self, midi_pitch):
+        """將加上轉調後的音高，限制在 60~95 之間 (自動移八度)"""
+        while midi_pitch < 60:
+            midi_pitch += 12
+        while midi_pitch > 95:
+            midi_pitch -= 12
+        return midi_pitch
+    
     def play_engine(self):
         # 播放前紅字倒數
         for i in range(3, 0, -1):
@@ -168,7 +191,7 @@ class AIPianoApp:
         start_t = time.time()
         elapsed = 0
         notes = self.current_song['notes']
-        bpm_factor = 60 / self.current_song['bpm']
+        #bpm_factor = 60 / self.current_song['bpm']
         i = 0
         
         while i < len(notes) and self.is_playing:
@@ -179,14 +202,18 @@ class AIPianoApp:
 
             current_speed = self.speed.get()
             n = notes[i]
-            # 換算目標時間 (考慮動態速度)
-            target_time = (n['t'] * bpm_factor) / current_speed
+            # 因為 n['t'] 已經是絕對秒數，直接除以倍速即可
+            target_time = n['t'] / current_speed
             
-            # 和弦優化：預讀同一毫秒內的所有音符
-            chord_midi = [n['p'] + self.transpose.get()]
+            # 和弦優化：抓取同一時間點的所有音符
+            # 先加上 UI 的轉調值，再進行八度修正，確保最終音高在 60~95 內
+            base_pitch = n['p'] + self.transpose.get()
+            chord_midi = [self.adjust_pitch(base_pitch)]
+
             j = i + 1
             while j < len(notes) and abs(notes[j]['t'] - n['t']) < 0.005:
-                chord_midi.append(notes[j]['p'] + self.transpose.get())
+                next_pitch = notes[j]['p'] + self.transpose.get()
+                chord_midi.append(self.adjust_pitch(next_pitch))
                 j += 1
 
             # 高精準度等待
