@@ -4,12 +4,12 @@
   在線式的MIDI轉換器
 
 
-> [!資訊]
+> [!tip]
 >
 > 本項目目前為早期開發階段，有任何問題歡迎提交Pull requests 與 Issue。
 
 
->[!宣告]
+>[!worrior]
 >
 > 本項目使用 << GPL-3.0 license >> 作為版權宣告。
 
