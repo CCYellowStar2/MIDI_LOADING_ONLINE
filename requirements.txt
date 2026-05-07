@@ -15,3 +15,5 @@ music21
 
 # MaaFramework Agent runtime (used by the background-output Custom action)
 MaaFw
+
+pywin32
