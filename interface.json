@@ -1,0 +1,38 @@
+{
+  "interface_version": 2,
+  "name": "midi_loading_online",
+  "label": "MIDI Loading Online",
+  "title": "MIDI Loading Online",
+  "version": "0.1.0",
+  "description": "MIDI / MusicXML automatic piano playback through a MaaFramework custom action.",
+  "resource": [
+    {
+      "name": "DefaultResource",
+      "label": "默认资源",
+      "path": [
+        "assets/resource/base"
+      ]
+    }
+  ],
+  "import": [
+    "assets/resource/tasks/auto_piano.json"
+  ],
+  "controller": [
+    {
+      "name": "Win32Controller",
+      "label": "Windows 窗口",
+      "type": "Win32",
+      "win32": {
+        "screencap": "Background",
+        "keyboard": "PostMessage"
+      }
+    }
+  ],
+  "agent": {
+    "child_exec": "python",
+    "child_args": [
+      "-u",
+      "./agent/main.py"
+    ]
+  }
+}

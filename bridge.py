@@ -1,21 +1,11 @@
 import time
 from pynput.keyboard import Controller, Key
+from key_mapping import NOTE_KEY_MAPPING
 
 class KeyboardBridge:
     def __init__(self):
         self.keyboard = Controller()
-        # 根據圖片分析的完整映射
-        self.mapping = {
-            # 低音 Z-M
-            60: "z", 61: "shift+z", 62: "x", 63: "ctrl+c", 64: "c", 65: "v", 66: "shift+v",
-            67: "b", 68: "shift+b", 69: "n", 70: "ctrl+m", 71: "m",
-            # 中音 A-J
-            72: "a", 73: "shift+a", 74: "s", 75: "ctrl+d", 76: "d", 77: "f", 78: "shift+f",
-            79: "g", 80: "shift+g", 81: "h", 82: "ctrl+j", 83: "j",
-            # 高音 Q-U
-            84: "q", 85: "shift+q", 86: "w", 87: "ctrl+e", 88: "e", 89: "r", 90: "shift+r",
-            91: "t", 92: "shift+t", 93: "y", 94: "ctrl+u", 95: "u"
-        }
+        self.mapping = NOTE_KEY_MAPPING
 
     def execute_chord(self, midi_notes):
         """和弦分組處理：避免 Shift/Ctrl 污染普通音符"""
