@@ -1,136 +1,129 @@
 import time
-from pynput.keyboard import Controller, Key
+import ctypes
 from key_mapping import NOTE_KEY_MAPPING
 
+user32 = ctypes.windll.user32
+WM_KEYDOWN = 0x0100
+WM_KEYUP = 0x0101
+WM_ACTIVATE = 0x0006
+WA_CLICKACTIVE = 2
+
+# 使用游戏专用的 左Shift 和 左Ctrl 防跑调
+WIN32_VK = {
+    "shift": 0xA0,
+    "ctrl": 0xA2,
+    "a": 0x41,
+    "b": 0x42,
+    "c": 0x43,
+    "d": 0x44,
+    "e": 0x45,
+    "f": 0x46,
+    "g": 0x47,
+    "h": 0x48,
+    "i": 0x49,
+    "j": 0x4A,
+    "k": 0x4B,
+    "l": 0x4C,
+    "m": 0x4D,
+    "n": 0x4E,
+    "o": 0x4F,
+    "p": 0x50,
+    "q": 0x51,
+    "r": 0x52,
+    "s": 0x53,
+    "t": 0x54,
+    "u": 0x55,
+    "v": 0x56,
+    "w": 0x57,
+    "x": 0x58,
+    "y": 0x59,
+    "z": 0x5A,
+}
+
+# ==========================================
+# 填入游戏的精确名称
+WINDOW_TITLE = "异环  "
+# ==========================================
+
+
+def get_lparam(vk_code, is_down=True):
+    """构建底层硬件扫描码"""
+    scan_code = user32.MapVirtualKeyW(vk_code, 0)
+    lparam = 1 | (scan_code << 16)
+    if not is_down:
+        lparam |= 0xC0000000
+    return lparam
+
+
 class KeyboardBridge:
-    def __init__(self):
-        self.keyboard = Controller()
+    def __init__(
+        self, controller=None, hold_seconds: float = 0.008, wait_jobs: bool = False
+    ):
         self.mapping = NOTE_KEY_MAPPING
+        self.hold_seconds = hold_seconds
+        self.hwnd = user32.FindWindowW(None, WINDOW_TITLE)
+        print(f"找到窗口: '{WINDOW_TITLE}'")
+
+        if not self.hwnd:
+            print(f"【警告】找不到窗口: '{WINDOW_TITLE}'")
+
+    def _force_send_key(self, vk_code, is_down):
+        """带有强行唤醒的底层发送器"""
+        if not self.hwnd:
+            return
+
+        # 发送前强行给窗口发一个“鼠标点击激活”信号，骗过后台检测！
+        user32.SendMessageW(self.hwnd, WM_ACTIVATE, WA_CLICKACTIVE, 0)
+
+        lparam = get_lparam(vk_code, is_down)
+        msg = WM_KEYDOWN if is_down else WM_KEYUP
+        user32.PostMessageW(self.hwnd, msg, vk_code, lparam)
 
     def execute_chord(self, midi_notes):
-        """和弦分組處理：避免 Shift/Ctrl 污染普通音符"""
-        normal_keys = []
-        shift_keys = []
-        ctrl_keys = []
+        if not self.hwnd:
+            return
 
-        # 1. 將音符按修飾鍵分類
+        normal_keys, shift_keys, ctrl_keys = [], [], []
+
         for note in midi_notes:
             if note in self.mapping:
                 action = self.mapping[note]
-                key = action.split('+')[-1]
-                
-                if 'shift+' in action:
+                key = action.split("+")[-1]
+                if "shift+" in action:
                     shift_keys.append(key)
-                elif 'ctrl+' in action:
+                elif "ctrl+" in action:
                     ctrl_keys.append(key)
                 else:
                     normal_keys.append(key)
 
-        try:
-            # 2. 彈奏普通鍵 (白鍵)
-            if normal_keys:
-                for k in normal_keys: 
-                    self.keyboard.press(k)
-                time.sleep(0.01) # 短暫停留讓遊戲識別
-                for k in normal_keys: 
-                    self.keyboard.release(k)
+        # 隔离分组，并发弹奏
+        self._press_group(normal_keys, None)
+        self._press_group(shift_keys, "shift")
+        self._press_group(ctrl_keys, "ctrl")
 
-            # 3. 彈奏 Shift 鍵 (黑鍵)
-            if shift_keys:
-                self.keyboard.press(Key.shift)
-                for k in shift_keys: 
-                    self.keyboard.press(k)
-                time.sleep(0.01)
-                for k in shift_keys: 
-                    self.keyboard.release(k)
-                self.keyboard.release(Key.shift)
+    def _press_group(self, keys, modifier: str | None = None):
+        if not keys:
+            return
 
-            # 4. 彈奏 Ctrl 鍵 (黑鍵)
-            if ctrl_keys:
-                self.keyboard.press(Key.ctrl)
-                for k in ctrl_keys: 
-                    self.keyboard.press(k)
-                time.sleep(0.01)
-                for k in ctrl_keys: 
-                    self.keyboard.release(k)
-                self.keyboard.release(Key.ctrl)
-                
-        except Exception as e:
-            print(f"Key press error: {e}")
-            pass
+        # 1. 按下修饰键
+        if modifier and modifier in WIN32_VK:
+            self._force_send_key(WIN32_VK[modifier], True)
+            time.sleep(0.002)  # 微小停顿，防跑调
 
+        # 2. 批量按下音符键
+        vk_codes = [WIN32_VK[key] for key in keys if key in WIN32_VK]
+        for vk in vk_codes:
+            self._force_send_key(vk, True)
 
+        # 3. 极速停留
+        if self.hold_seconds > 0:
+            time.sleep(self.hold_seconds)
 
+        # 4. 批量抬起音符键
+        for vk in reversed(vk_codes):
+            self._force_send_key(vk, False)
 
-
-#                        ____________
-#                       |            |
-#                       |            |
-#                       |            |
-#                       |            |
-#                       |            |
-#                       |            |
-#                       |            |
-#  _____________________|            |_____________________
-# |                                                        |
-# |                                                        |
-# |                                                        |
-# |_____________________              _____________________|
-#                       |            |
-#                       |            |
-#                       |            |
-#                       |            |
-#                       |            |
-#                       |            |
-#                       |            |
-#                       |            |
-#                       |            |
-#                       |            |
-#                       |            |
-#                       |            |
-#                       |            |
-#                       |            |
-#                       |            |
-#                       |____________|
-
-
-# 耶和華是我的牧者，我必不致缺乏。
-# 他使我躺臥在青草地上，領我在可安歇的水邊。
-# 他使我的靈魂甦醒，為自己的名引導我走義路。
-# 我雖然行過死蔭的幽谷，也不怕遭害，因為你與我同在；你的杖，你的竿，都安慰我。
-# 在我敵人面前，你為我擺設筵席；你用油膏了我的頭，使我的福杯滿溢。
-# 我一生一世必有恩惠慈愛隨著我；我且要住在耶和華的殿中，直到永遠。
-# - 詩篇 23篇
-
-
-
-#                            _ooOoo_  
-#                           o8888888o  
-#                           88" . "88  
-#                           (| -_- |)  
-#                            O\ = /O  
-#                        ____/`---'\____  
-#                      .   ' \\| |# `.  
-#                       / \\||| : |||# \  
-#                     / _||||| -:- |||||- \  
-#                       | | \\\ - #/ | |  
-#                     | \_| ''\---/'' | |  
-#                      \ .-\__ `-` ___/-. /  
-#                   ___`. .' /--.--\ `. . __  
-#                ."" '< `.___\_<|>_/___.' >'"".  
-#               | | : `- \`.;`\ _ /`;.`/ - ` : | |  
-#                 \ \ `-. \_ __\ /__ _/ .-` / /  
-#         ======`-.____`-.___\_____/___.-`____.-'======  
-#                            `=---='  
-#  
-#         .............................................  
-#                  佛祖保佑             永无BUG 
-#          佛曰:  
-#                  写字楼里写字间，写字间里程序员；  
-#                  程序人员写程序，又拿程序换酒钱。  
-#                  酒醒只在网上坐，酒醉还来网下眠；  
-#                  酒醉酒醒日复日，网上网下年复年。  
-#                  但愿老死电脑间，不愿鞠躬老板前；  
-#                  奔驰宝马贵者趣，公交自行程序员。  
-#                  别人笑我忒疯癫，我笑自己命太贱；  
-#                  不见满街漂亮妹，哪个归得程序员？
+        # 5. 抬起修饰键
+        if modifier and modifier in WIN32_VK:
+            time.sleep(0.001)
+            self._force_send_key(WIN32_VK[modifier], False)
