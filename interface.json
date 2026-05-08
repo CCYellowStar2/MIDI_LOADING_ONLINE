@@ -4,7 +4,7 @@
   "label": "MIDI Loading Online",
   "title": "MIDI Loading Online",
   "version": "0.1.0",
-  "description": "MIDI / MusicXML automatic piano playback through a MaaFramework custom action.",
+  "description": "MIDI automatic piano playback through a MaaFramework custom action.",
   "resource": [
     {
       "name": "DefaultResource",

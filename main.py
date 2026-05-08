@@ -38,7 +38,7 @@ class AIPianoApp:
         ctrl_frame = ttk.Frame(self.root)
         ctrl_frame.pack(pady=10, fill="x", padx=20)
         
-        ttk.Button(ctrl_frame, text="導入檔案 (MIDI/XML)", command=self.load_midi).pack(side="left", padx=5)
+        ttk.Button(ctrl_frame, text="導入檔案 (MIDI)", command=self.load_midi).pack(side="left", padx=5)
         ttk.Button(ctrl_frame, text="播放/繼續", command=self.start_playback).pack(side="left", padx=5)
         ttk.Button(ctrl_frame, text="暫停", command=self.pause_playback).pack(side="left", padx=5)
         ttk.Button(ctrl_frame, text="停止", command=self.stop_playback).pack(side="left", padx=5)
@@ -136,11 +136,8 @@ class AIPianoApp:
         self.info_lbl.config(text=info)
 
     def load_midi(self):
-        # 支援雙引擎格式
         path = filedialog.askopenfilename(filetypes=[
-            ("所有支援格式", "*.mid;*.midi;*.xml;*.mxl"),
-            ("MIDI 檔案", "*.mid;*.midi"),
-            ("MusicXML 檔案", "*.xml;*.mxl")
+            ("MIDI 檔案", "*.mid;*.midi")
         ])
         if path:
             try:
