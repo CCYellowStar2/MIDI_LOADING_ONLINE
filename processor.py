@@ -16,7 +16,7 @@ class MidiProcessor:
 
     def _parse_midi_with_mido(self, file_path):
         """使用 mido 解析 MIDI 檔案 (節奏最精準，支援變速，並過濾鼓組)"""
-        mid = mido.MidiFile(file_path)
+        mid = mido.MidiFile(file_path, clip=True)
         notes = []
         current_time_sec = 0.0 
         
